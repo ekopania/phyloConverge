@@ -18,7 +18,9 @@ getPermulatedPhenotypeTree=function(foregrounds, neutraltree, root_species){
   masterTree[[1]] = neutraltree
   names(masterTree) = c("masterTree")
 
-  permulated_tree = simBinPhenoCC(masterTree, neutraltree, root_species, fg_vec, sisters_list=sisters_list, pathvec, plotTreeBool = F)
+  #permulated_tree = simBinPhenoCC(masterTree, neutraltree, root_species, fg_vec, sisters_list=sisters_list, pathvec, plotTreeBool = F)
+  print("Running permulation version with relaxed foreground topology requirements")
+  permulated_tree = simBinPhenoCC_relaxFGtopo(masterTree, neutraltree, root_species, fg_vec, sisters_list=sisters_list, pathvec, plotTreeBool = F)
 
   permulated_tree
 }

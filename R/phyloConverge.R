@@ -146,3 +146,13 @@ scanWithPhyloConverge=function(maf, foregrounds, permulated_foregrounds, neutral
   out_df = data.frame("start"=position-flank, "end"=position+flank, "corr_score"=scan_score)
   out_df
 }
+
+#'Count number of foreground tips present in alignment
+#' @param maf an MSA object containing the sequence alignment
+#' @param foregrounds a character vector containing the names of the foreground species
+#' @export
+countFgTips=function(maf, foregounds){
+   tips<-names(maf)
+   fg_count<-length(intersect(tips, foregrounds))
+   fg_count
+}

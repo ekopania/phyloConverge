@@ -108,9 +108,10 @@ run_phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf,
 
 #' @keywords internal
 run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foreground_tips, permulated_foregrounds, neutralMod, maf, refseq, feature=NULL, alpha=0.05, min.fg=2, method="LRT", mode="CONACC", adapt=T){
+  #PHYLOP AUTOMATICALLY PRUNES TREE TO ONLY INCLUDE SPECIES IN ALIGNMENT - GIVES WARNING MESSAGE
   observed.score = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=foregrounds)
   observed.score = observed.score$score
-  #Prune neutral model tree to only include species in alignment
+  #Prune neutral model tree to only include species in alignment - THIS MIGHT NOT BE NECESSARY
   pruned_tree = prune.tree(neutralMod$tree, seqs=names(maf), all.but=TRUE) 
   pruned_nm = neutralMod
   pruned_nm$tree = pruned_tree
@@ -119,13 +120,18 @@ run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foregrou
     maxnum_extreme = round(alpha*max_permulations) ### centering on median --> the same pruning threshold on both sides
     permulated_scores = rep(NA, length(permulated_foregrounds))
     for (i in 1:length(permulated_foregrounds)){
-      #Subset permulated foregrounds to only include species in alignment
-      subset_perm_fg = permulated_foregrounds[[i]][which(names(permulated_foregrounds[[i]]) %in% names(maf))]
-      print(subset_perm_fg)
+      #Subset permulated continuous data to only include species in alignment
+      subset_perm = permulated_foregrounds[[i]][which(names(permulated_foregrounds[[i]]) %in% names(maf))]
+      print("Subset of permulated continuous trait values:")
+      print(length(subset_perm))
+      print(subset_perm)
       #Get top n permulated foregrounds, where n is the number of real foreground tips present in this aln
-      sort_perm_fg = (-(sort(subset_perm_fg)))
-      print(sort_perm_fg)
-      perm_fg_species = names(sort_perm_fg)[1:num_foreground_tips]
+      sort_perm = (-(sort(subset_perm)))
+      print("Sorted permulated continuous traits:")
+      print(sort_perm)
+      perm_fg_species = names(sort_perm)[1:num_foreground_tips]
+      print("Permulated foreground tips:")
+      print(length(perm_fg_species))
       print(perm_fg_species)
       q()
       #Get internal nodes from sister permulated foreground species

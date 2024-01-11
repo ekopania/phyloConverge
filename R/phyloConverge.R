@@ -16,6 +16,9 @@ require('rphast')
 #' @export
 phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf, refseq, feature=NULL, alpha=0.05, min.fg=2, method="LRT", mode="CONACC", adapt=T){
   fg_exist = checkForegrounds(maf, foregrounds)
+  #Counts the number of foreground TIPS present in the alignment
+  #fg_exist also looks for internal nodes, so we need a separate function instead of length(fg_exist)
+  num_fg = countFgTips(maf, foregounds)
   if (is.null(feature)){
     feature = convertAlignmentToFeature(maf, refseq)
   }
@@ -28,7 +31,9 @@ phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf, ref
     out = NULL
     for (i in 1:nrow(feature)){
       print(paste("Scoring feature", i, "/", nrow(feature), feature_names[i]))
-      out_i = run_phyloConverge(fg_exist, permulated_foregrounds, neutralMod, maf, refseq, feature=feature[i,], alpha=alpha, min.fg=min.fg, method=method, mode=mode, adapt=adapt)
+      #out_i = run_phyloConverge(fg_exist, permulated_foregrounds, neutralMod, maf, refseq, feature=feature[i,], alpha=alpha, min.fg=min.fg, method=method, mode=mode, adapt=adapt)
+      #Run new version that takes continuous permulated traits as input
+      out_i = run_phyloConverge_continuousTraitPermulations(fg_exist, num_fg, permulated_foregrounds, neutralMod, maf, refseq, feature=feature[i,], alpha=alpha, min.fg=min.fg, method=method, mode=mode, adapt=adapt)
       out = rbind(out, out_i)
     }
   } else {
@@ -100,6 +105,100 @@ run_phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf,
   out = data.frame("permPval"=permPval, "corr_score"=corr_score, "uncorr_score"=observed.score)
   out
 }
+
+#' @keywords internal
+run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foreground_tips, permulated_foregrounds, neutralMod, maf, refseq, feature=NULL, alpha=0.05, min.fg=2, method="LRT", mode="CONACC", adapt=T){
+  observed.score = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=foregrounds)
+  observed.score = observed.score$score
+  #Prune neutral model tree to only include species in alignment
+  pruned_tree = prune.tree(neutralMod$tree, seqs=names(maf), all.but=TRUE) 
+  pruned_nm = neutralMod
+  pruned_nm$tree = pruned_tree
+  if (adapt){
+    max_permulations = length(permulated_foregrounds)
+    maxnum_extreme = round(alpha*max_permulations) ### centering on median --> the same pruning threshold on both sides
+    permulated_scores = rep(NA, length(permulated_foregrounds))
+    for (i in 1:length(permulated_foregrounds)){
+      #Subset permulated foregrounds to only include species in alignment
+      subset_perm_fg = permulated_foregrounds[[i]][which(names(permulated_foregrounds[[i]]) %in% names(maf))]
+      print(subset_perm_fg)
+      #Get top n permulated foregrounds, where n is the number of real foreground tips present in this aln
+      sort_perm_fg = (-(sort(subset_perm_fg)))
+      print(sort_perm_fg)
+      perm_fg_species = names(sort_perm_fg)[1:num_foreground_tips]
+      print(perm_fg_species)
+      q()
+      #Get internal nodes from sister permulated foreground species
+      #NEED NEW FUNCTION FROM PFENNING LAB
+      perm_fg_internal = #NEW FUNCTION
+      #Permulated foregrounds are a combination of foreground species and foreground internal branches
+      fg_exist = c(perm_fg_species, perm_fg_internal)
+      #The rest of the function should work as before
+      if (length(fg_exist) >= min.fg){
+        #REPLACE neutralMod with pruned_nm???
+        permulated_score_i = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=fg_exist)
+        permulated_scores[i] = permulated_score_i$score
+        computed_permulated_scores = permulated_scores[!is.na(permulated_scores)]
+        if (length(computed_permulated_scores) >= 2*maxnum_extreme){
+          median_null_scores = median(computed_permulated_scores)
+          if (observed.score <= median_null_scores){
+            one_sided_null_scores = computed_permulated_scores[which(computed_permulated_scores < median_null_scores)]
+            ind_nonextreme = which(one_sided_null_scores > observed.score)
+            ind_extreme = which(one_sided_null_scores <= observed.score)
+          } else if (observed.score > median_null_scores){
+            one_sided_null_scores = computed_permulated_scores[which(computed_permulated_scores > median_null_scores)]
+            ind_nonextreme = which(one_sided_null_scores < observed.score)
+            ind_extreme = which(one_sided_null_scores >= observed.score)
+          }
+
+          if (length(ind_extreme) > maxnum_extreme || i == length(permulated_foregrounds)){
+            permPval = min(maxnum_extreme+1, length(ind_extreme)+1)/(length(one_sided_null_scores)+1)   ###min(length(computed_permulated_scores)+1, length(permulated_foregrounds)+1)
+            corr_score = sign(observed.score-median_null_scores)*(-log10(permPval))
+            break
+          }
+        }
+      }
+    }
+  } else {
+    permulated_scores = rep(NA, length(permulated_foregrounds))
+    for (i in 1:length(permulated_foregrounds)){
+      #Subset permulated foregrounds to only include species in alignment
+      subset_perm_fg = permulated_foregrounds[[i]][which(names(permulated_foregrounds[[i]]) %in% names(maf))]
+      print(subset_perm_fg)
+      #Get top n permulated foregrounds, where n is the number of real foreground tips present in this aln
+      sort_perm_fg = (-(sort(subset_perm_fg)))
+      print(sort_perm_fg)
+      perm_fg_species = names(sort_perm_fg)[1:num_foreground_tips]
+      print(perm_fg_species)
+      #Get internal nodes from sister permulated foreground species
+      #NEED NEW FUNCTION FROM PFENNING LAB
+      perm_fg_internal = #NEW FUNCTION
+      #Permulated foregrounds are a combination of foreground species and foreground internal branches
+      fg_exist = c(perm_fg_species, perm_fg_internal)
+      #The rest of the function should work as before
+      if (length(fg_exist) >= min.fg){
+         #REPLACE neutralMod with pruned_nm???
+         permulated_score_i = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=fg_exist)
+        permulated_scores[i] = permulated_score_i$score
+      }
+    }
+    computed_permulated_scores = permulated_scores[!is.na(permulated_scores)]
+    median_null_scores = median(computed_permulated_scores)
+    if (observed.score <= median_null_scores){
+      one_sided_null_scores = computed_permulated_scores[which(computed_permulated_scores < median_null_scores)]
+      ind_extreme = which(one_sided_null_scores <= observed.score)
+    } else if (observed.score > median_null_scores){
+      one_sided_null_scores = computed_permulated_scores[which(computed_permulated_scores > median_null_scores)]
+      ind_extreme = which(one_sided_null_scores >= observed.score)
+    }
+
+    permPval = (length(ind_extreme)+1)/(length(one_sided_null_scores)+1)
+    corr_score = sign(observed.score - median_null_scores)*(-log10(permPval))
+  }
+  out = data.frame("permPval"=permPval, "corr_score"=corr_score, "uncorr_score"=observed.score)
+  out
+}
+
 
 
 

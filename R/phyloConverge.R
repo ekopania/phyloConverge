@@ -108,13 +108,25 @@ run_phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf,
 
 #' @keywords internal
 run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foreground_tips, permulated_foregrounds, neutralMod, maf, refseq, feature=NULL, alpha=0.05, min.fg=2, method="LRT", mode="CONACC", adapt=T){
+  print("Running phyloConverge with continuous trait permulations as input")
   #PHYLOP AUTOMATICALLY PRUNES TREE TO ONLY INCLUDE SPECIES IN ALIGNMENT - GIVES WARNING MESSAGE
   observed.score = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=foregrounds)
   observed.score = observed.score$score
-  #Prune neutral model tree to only include species in alignment - THIS MIGHT NOT BE NECESSARY
-  pruned_tree = prune.tree(neutralMod$tree, seqs=names(maf), all.but=TRUE) 
-  pruned_nm = neutralMod
-  pruned_nm$tree = pruned_tree
+
+  #Get neutral tree from neutral tree model
+  neutral_tree<-read.tree(text=myMod$tree)
+  print(neutral_tree)
+
+  #Get optimal rate model - do this here instead of in the loop because it is based on the real data and we only need to get it once
+  #WAIT should it be based on the real data or based on the permulated values???
+  orm = getOptimalRateModel(foregrounds, neutral_tree, pthreshold = 0.25, lthreshold = 1.3)
+  #Makes neutral tree into a list of trees of length 1; necessary for some functions to read it properly
+  masterTree = list()
+  masterTree[[1]] = neutral_tree
+  names(masterTree) = c("masterTree")
+  #MIGHT NEED TO DO THIS INSTEAD - char2PathsCategorical requires a trees object with tree$ap$matIndex, not just a list of trees
+  #This function is slow, so run as few times as possble or see if there's a way around this; Nathan mentioned Maria wrote a faster version?
+  treeobj<-readTrees("mean_length_neutral_tree.DeanSpeciesOnly.tre")
   if (adapt){
     max_permulations = length(permulated_foregrounds)
     maxnum_extreme = round(alpha*max_permulations) ### centering on median --> the same pruning threshold on both sides
@@ -133,15 +145,24 @@ run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foregrou
       print("Permulated foreground tips:")
       print(length(perm_fg_species))
       print(perm_fg_species)
-      q()
+      #Encode all species as either foreground or background based on permulations
+      #Foreground = TRUE; this will tell char2TreeCategorical to return a binary phenotype tree
+      perm_all_species = unlist(sapply(neutral_tree$tip.label, function(x) if(x %in% perm_fg_species){"TRUE"}else{"FALSE"}))
       #Get internal nodes from sister permulated foreground species
       #NEED NEW FUNCTION FROM PFENNING LAB
+      pdf("perm_fg_tree_char2TreeCategorical.pdf")
+      perm_fg_tree = char2TreeCategorical(perm_all_species, masterTree, model=orm, useSpecies=names(maf), plot=TRUE)
+      dev.off()
+      print(perm_fg_tree)
+      #I THINK this gives us a vector of every node in the tree and whether it should be 0, 1, or NA; just need to get this back to species names and we should be good; need to figure out how to get this into phyloP format though
+      perm_fg_paths = char2PathsCategorical(perm_all_species, treeobj, model=orm, useSpecies=names(maf))
+      print(perm_fg_paths)
+      q()
       perm_fg_internal = #NEW FUNCTION
       #Permulated foregrounds are a combination of foreground species and foreground internal branches
       fg_exist = c(perm_fg_species, perm_fg_internal)
       #The rest of the function should work as before
       if (length(fg_exist) >= min.fg){
-        #REPLACE neutralMod with pruned_nm???
         permulated_score_i = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=fg_exist)
         permulated_scores[i] = permulated_score_i$score
         computed_permulated_scores = permulated_scores[!is.na(permulated_scores)]

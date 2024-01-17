@@ -22,12 +22,7 @@ getPermulatedPhenotypeTree=function(foregrounds, neutraltree, root_species){
 
   #permulated_tree = simBinPhenoCC(masterTree, neutraltree, root_species, fg_vec, sisters_list=sisters_list, pathvec, plotTreeBool = F)
   #print("Running permulation version with relaxed foreground topology requirements")
-  #permulated_tree = simBinPhenoCC_relaxFGtopo(masterTree, neutraltree, root_species, fg_vec, sisters_list=sisters_list, pathvec, plotTreeBool = F)
-  print("Running permulation version that returns continuous traits simulated on tree (Pagel's lambda)")
-  #Calculate lambda here instead of in permulation function so we only need to calculate it once 
-  lambda<-getLambda(neutraltree, foregrounds)
-  print(lambda)
-  permulated_tree = simBinPhenoCC_continuousPagel(masterTree, root_species, lam=lambda, plotTreeBool=T)
+  permulated_tree = simBinPhenoCC_relaxFGtopo(masterTree, neutraltree, root_species, fg_vec, sisters_list=sisters_list, pathvec, plotTreeBool = F)
   permulated_tree
 }
 
@@ -37,15 +32,12 @@ getPermulatedPhenotypeTree=function(foregrounds, neutraltree, root_species){
 #' @param root_species the species to root the tree on
 #' @return permulated_traits a vector of simulated continuous phenotype values
 #' @export
-getPermulatedContinuousPhenotype=function(foregrounds, neutraltree, root_species){
+getPermulatedContinuousPhenotype=function(foregrounds, neutraltree, root_species, rateMod, lambda){
   masterTree = list()
   masterTree[[1]] = neutraltree
   names(masterTree) = c("masterTree")
 
   print("Running permulation version that returns continuous traits simulated on tree (Pagel's lambda)")
-  #Calculate lambda here instead of in permulation function so we only need to calculate it once
-  lambda<-getLambda(neutraltree, foregrounds)
-  print(lambda)
   permulated_traits = simBinPhenoCC_continuousPagel(masterTree, root_species, lam=lambda, plotTreeBool=F)
   permulated_traits
 }
@@ -60,9 +52,11 @@ getPermulatedContinuousPhenotype=function(foregrounds, neutraltree, root_species
 #' @return a list object containing permulated phenotypes
 #' @export
 getPermulatedPhenotypes=function(foregrounds, neutraltree, num_perms, root_species, output_mod="names"){
+  orm = getOptimalRateModel(foregrounds, neutraltree, pthreshold = 0.25, lthreshold = 1.3)
+  lam = getLambda(neutraltree, foregrounds, orm)
   fg_reps = lapply(1:num_perms, return_object, x=foregrounds)
   if (output_mod == "continuous"){
-    permulated_trees = lapply(fg_reps, getPermulatedContinuousPhenotype, neutraltree=neutraltree, root_species=root_species)
+    permulated_trees = lapply(fg_reps, getPermulatedContinuousPhenotype, neutraltree=neutraltree, root_species=root_species, rateMod=orm, lambda=lam)
     return(permulated_trees)
   } else{
       permulated_trees = lapply(fg_reps, getPermulatedPhenotypeTree, neutraltree=neutraltree, root_species=root_species)
@@ -81,22 +75,29 @@ getPermulatedPhenotypes=function(foregrounds, neutraltree, num_perms, root_speci
 #' @param neutraltree a phylo object representing neutral evolution
 #' @param pthresh
 #' @param lthresh
+#' @return a string either "ER" or "ARD", whichever rate model best fits the input data
+#' @export
 getOptimalRateModel=function(foregrounds, neutraltree, pthreshold = 0.25, lthreshold = 1.3){
-    #Makes neutral tree into a list of trees of length 1; necessary for searchRateModels to read it properly
-    masterTree = list()
-    masterTree[[1]] = neutraltree
-    names(masterTree) = c("masterTree")
-    #Encode binary phenotype (foreground or background) for all tips in tree
-    fg_phenos<-unlist(sapply(neutraltree$tip.label, function(x) if(x %in% foregrounds){"fg"}else{"bg"}))
-    search_res = searchRateModels(masterTree, fg_phenos)
-    #getMatrixFromAbbr takes the abbreviation ("ER", "ARD", or "SYM") and the number of phenotype states
-    #"SYM" is the same as "ER" for a binary trait, so excluding "SYM"
-    rate_models = list(getMatrixFromAbbr("ER",2), getMatrixFromAbbr("ARD",2))
-    names(rate_models) = c("ER", "ARD")
-    comp = compareRateModels(rate_models, masterTree, fg_phenos, nsims = 100, nested_only = FALSE, return_type = "pvals")
-    return(comp)
-    #I think binary models are simple enough that I can just get the one p-val comparing ER and ARD; if it is > 0.05 ER is fine but if it is <0.05 ARD is the better model - MAKE SURE I'M INTERPRETING THAT CORRECTLY
-    #If that's the case, return either ER and ARD; can incorporate this intoo existing functions and use to caluclate lambda and also for ancestral state reconstruction on permulated trees
+  #Makes neutral tree into a list of trees of length 1; necessary for searchRateModels to read it properly
+  masterTree = list()
+  masterTree[[1]] = neutraltree
+  names(masterTree) = c("masterTree")
+  #Encode binary phenotype (foreground or background) for all tips in tree
+  fg_phenos<-unlist(sapply(neutraltree$tip.label, function(x) if(x %in% foregrounds){"fg"}else{"bg"}))
+  search_res = searchRateModels(masterTree, fg_phenos)
+  #getMatrixFromAbbr takes the abbreviation ("ER", "ARD", or "SYM") and the number of phenotype states
+  #"SYM" is the same as "ER" for a binary trait, so excluding "SYM"
+  rate_models = list(getMatrixFromAbbr("ER",2), getMatrixFromAbbr("ARD",2))
+  names(rate_models) = c("ER", "ARD")
+  comp = compareRateModels(rate_models, masterTree, fg_phenos, nsims = 100, nested_only = FALSE, return_type = "pvals")
+  pval = comp["ER", "ARD"]
+  #From ancestral reconstruction walkthru: "small p-value...is evidence that the more complex model, corresponding to the column, provides a significantly better fit to the data at the tips." i.e., p < 0.05 means choose ARD, otherwise ER is just as good
+  if(pval < 0.05){
+    orm = "ARD"
+  } else{
+    orm = "ER"
+  }
+  return(orm)
 }
 
 #' Calculate Pagel's lambda for a binary trait using Geiger's fitDiscrete function
@@ -104,11 +105,11 @@ getOptimalRateModel=function(foregrounds, neutraltree, pthreshold = 0.25, lthres
 #' @param foregrounds a vector of foreground species names
 #' @return a numerical value (Pagel's lambda)
 #' @export
-getLambda=function(tree, foregrounds){
+getLambda=function(tree, foregrounds, rateMod){
   #Encode foreground or background as a binary trait for each species in the tree
   in_fg<-sapply(tree$tip.label, function(x) if(x %in% foregrounds) "fg" else "bg")
   #model=ARD (all rates different); can change this to an equal rates model? I think ARD makes more sense for most traits
-  fitLambda<-fitDiscrete(tree, in_fg, model="ARD", transform="lambda")
+  fitLambda<-fitDiscrete(tree, in_fg, model=rateMod, transform="lambda")
   l<-fitLambda$opt$lambda
   l
 } 

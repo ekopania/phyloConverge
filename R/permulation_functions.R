@@ -76,6 +76,29 @@ getPermulatedPhenotypes=function(foregrounds, neutraltree, num_perms, root_speci
   }
 }
 
+#' Determine the optimal rate model based on real data (following ancestral state reconstruction walkthrough)
+#' @param foregrounds a vector of foreground species names
+#' @param neutraltree a phylo object representing neutral evolution
+#' @param pthresh
+#' @param lthresh
+getOptimalRateModel=function(foregrounds, neutraltree, pthreshold = 0.25, lthreshold = 1.3){
+    #Makes neutral tree into a list of trees of length 1; necessary for searchRateModels to read it properly
+    masterTree = list()
+    masterTree[[1]] = neutraltree
+    names(masterTree) = c("masterTree")
+    #Encode binary phenotype (foreground or background) for all tips in tree
+    fg_phenos<-unlist(sapply(neutraltree$tip.label, function(x) if(x %in% foregrounds){"fg"}else{"bg"}))
+    search_res = searchRateModels(masterTree, fg_phenos)
+    #getMatrixFromAbbr takes the abbreviation ("ER", "ARD", or "SYM") and the number of phenotype states
+    #"SYM" is the same as "ER" for a binary trait, so excluding "SYM"
+    rate_models = list(getMatrixFromAbbr("ER",2), getMatrixFromAbbr("ARD",2))
+    names(rate_models) = c("ER", "ARD")
+    comp = compareRateModels(rate_models, masterTree, fg_phenos, nsims = 100, nested_only = FALSE, return_type = "pvals")
+    return(comp)
+    #I think binary models are simple enough that I can just get the one p-val comparing ER and ARD; if it is > 0.05 ER is fine but if it is <0.05 ARD is the better model - MAKE SURE I'M INTERPRETING THAT CORRECTLY
+    #If that's the case, return either ER and ARD; can incorporate this intoo existing functions and use to caluclate lambda and also for ancestral state reconstruction on permulated trees
+}
+
 #' Calculate Pagel's lambda for a binary trait using Geiger's fitDiscrete function
 #' @param tree a phylogeny
 #' @param foregrounds a vector of foreground species names

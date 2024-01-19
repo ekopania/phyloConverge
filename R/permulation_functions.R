@@ -75,7 +75,7 @@ getPermulatedPhenotypes=function(foregrounds, neutraltree, num_perms, root_speci
 #' @param neutraltree a phylo object representing neutral evolution
 #' @param pthresh
 #' @param lthresh
-#' @return a string either "ER" or "ARD", whichever rate model best fits the input data
+#' @return a string either "ER" or "ARD", whichever rate model best fits the input data; a list of rate models
 #' @export
 getOptimalRateModel=function(foregrounds, neutraltree, pthreshold = 0.25, lthreshold = 1.3){
   #Makes neutral tree into a list of trees of length 1; necessary for searchRateModels to read it properly

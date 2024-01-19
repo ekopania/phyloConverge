@@ -126,7 +126,7 @@ run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foregrou
   names(masterTree) = c("masterTree")
   #MIGHT NEED TO DO THIS INSTEAD - char2PathsCategorical requires a trees object with tree$ap$matIndex, not just a list of trees
   #This function is slow, so run as few times as possble or see if there's a way around this; Nathan mentioned Maria wrote a faster version?
-  treeobj<-readTrees("mean_length_neutral_tree.DeanSpeciesOnly.tre")
+  #treeobj<-readTrees("mean_length_neutral_tree.DeanSpeciesOnly.tre")
   if (adapt){
     max_permulations = length(permulated_foregrounds)
     maxnum_extreme = round(alpha*max_permulations) ### centering on median --> the same pruning threshold on both sides
@@ -147,20 +147,39 @@ run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foregrou
       print(perm_fg_species)
       #Encode all species as either foreground or background based on permulations
       #Foreground = TRUE; this will tell char2TreeCategorical to return a binary phenotype tree
-      perm_all_species = unlist(sapply(neutral_tree$tip.label, function(x) if(x %in% perm_fg_species){"TRUE"}else{"FALSE"}))
+      #perm_all_species = unlist(sapply(neutral_tree$tip.label, function(x) if(x %in% perm_fg_species){"TRUE"}else{"FALSE"}))
       #Get internal nodes from sister permulated foreground species
       #NEED NEW FUNCTION FROM PFENNING LAB
-      pdf("perm_fg_tree_char2TreeCategorical.pdf")
-      perm_fg_tree = char2TreeCategorical(perm_all_species, masterTree, model=orm, useSpecies=names(maf), plot=TRUE)
-      dev.off()
-      print(perm_fg_tree)
+      #pdf("perm_fg_tree_char2TreeCategorical.pdf")
+      #perm_fg_tree = char2TreeCategorical(perm_all_species, masterTree, model=orm, useSpecies=names(maf), plot=TRUE)
+      #dev.off()
+      #print(perm_fg_tree)
       #I THINK this gives us a vector of every node in the tree and whether it should be 0, 1, or NA; just need to get this back to species names and we should be good; need to figure out how to get this into phyloP format though
-      perm_fg_paths = char2PathsCategorical(perm_all_species, treeobj, model=orm, useSpecies=names(maf))
-      print(perm_fg_paths)
-      q()
-      perm_fg_internal = #NEW FUNCTION
+      #perm_fg_paths = char2PathsCategorical(perm_all_species, treeobj, model=orm, useSpecies=names(maf))
+      #print(perm_fg_paths)
+#      rate_models = list(getMatrixFromAbbr("ER",2), getMatrixFromAbbr("ARD",2))
+#      names(rate_models) = c("ER", "ARD")
+#      #print(rate_models)
+#      pdf("node_states.longeraln.pdf", height=25, width=17)
+#      node_states = visCompareTwoRateModels(rate_models$ER, rate_models$ARD, masterTree, perm_all_species, mode = "match")
+#      dev.off()
+#      print(node_states$states)
+#      if(orm=="ER"){
+#        print(node_states$states[,"statesA"])
+#      } else{ #ARD
+#        print(node_states$states[,"statesB"])
+#      }
+      #pdf("fg2tree.all.pdf", height=25, width=17, onefile=TRUE)
+      fg2t_all = foreground2Tree(perm_fg_species, masterTree, plotTree=F, clade="all", useSpecies=names(maf))
+      #fg2t_ancestral = foreground2Tree(perm_fg_species, masterTree, plotTree=T, clade="ancestral", useSpecies=names(maf))
+      #fg2t_terminal = foreground2Tree(perm_fg_species, masterTree, plotTree=T, clade="terminal", useSpecies=names(maf))
+      #dev.off()
+      names(fg2t_all$edge.length)=nameEdges_all(fg2t_all)
+      #print(fg2t_all)
+      print(fg2t_all$edge.length)
       #Permulated foregrounds are a combination of foreground species and foreground internal branches
-      fg_exist = c(perm_fg_species, perm_fg_internal)
+      fg_exist = names(fg2t_all$edge.length)[which(fg2t_all$edge.length==1)]
+      print(fg_exist)
       #The rest of the function should work as before
       if (length(fg_exist) >= min.fg){
         permulated_score_i = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=fg_exist)
@@ -198,14 +217,13 @@ run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foregrou
       perm_fg_species = names(sort_perm_fg)[1:num_foreground_tips]
       print(perm_fg_species)
       #Get internal nodes from sister permulated foreground species
-      #NEED NEW FUNCTION FROM PFENNING LAB
-      perm_fg_internal = #NEW FUNCTION
+      fg2t_all = foreground2Tree(perm_fg_species, masterTree, plotTree=F, clade="all", useSpecies=names(maf))
+      names(fg2t_all$edge.length)=nameEdges_all(fg2t_all)
       #Permulated foregrounds are a combination of foreground species and foreground internal branches
-      fg_exist = c(perm_fg_species, perm_fg_internal)
+      fg_exist = names(fg2t_all$edge.length)[which(fg2t_all$edge.length==1)]
       #The rest of the function should work as before
       if (length(fg_exist) >= min.fg){
-         #REPLACE neutralMod with pruned_nm???
-         permulated_score_i = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=fg_exist)
+        permulated_score_i = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=fg_exist)
         permulated_scores[i] = permulated_score_i$score
       }
     }
@@ -282,3 +300,18 @@ countFgTips=function(maf, foregounds){
    fg_count<-length(intersect(tips, foregrounds))
    fg_count
 }
+
+#' Get names for both tips and internal branches of a phylo object
+#' @param tree a phylo object
+#' @return a vector tip labels and node names, sorted to match tree$edge
+#' @export
+nameEdges_all=function(tree){
+  all_labels = c(tree$tip.label, tree$node.label)
+  labels_ordered = c()
+  for(i in 1:nrow(tree$edge)){
+    idx=tree$edge[i,2]
+    labels_ordered = c(labels_ordered, all_labels[idx])
+  }
+  labels_ordered
+}
+

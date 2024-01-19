@@ -1,5 +1,7 @@
 require("rphast")
 
+#NEED TO FIX THIS - IT IS BASED ON THE ASSUMPTION THAT INTERNAL BRANCHES ARE WRITTEN "taxa1-taxa2"; doesn't apply to all trees (e.g., Zoonomia uses format fullTreeAnc1)
+#But also, we don't need this function for the continuous permulated trait version of phyloConverge
 #'Subset foreground species based on existing species in alignment file
 #' @param align alignment object read from read.msa
 #' @param foregrounds character vector containing the foreground species

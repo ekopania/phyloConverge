@@ -47,8 +47,13 @@ phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf, ref
 }
 
 #' @keywords internal
-run_phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf, refseq, feature=NULL, alpha=0.05, min.fg=2, method="LRT", mode="CONACC", adapt=T){
-  observed.score = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=foregrounds)
+run_phyloConverge=function(foregrounds, permulated_foregrounds, neutralMod, maf, refseq, feature=NULL, alpha=0.05, min.fg=2, method="LRT", mode="CONACC", adapt=T, phyloP_outfile=NULL){
+  #Save full phyloP result for the real data to outfile; by default name is phyloP_result.<maf_filename>.txt
+  if(is.null(phyloP_outfile)){
+    mafname=strsplit(maf, "/")[[1]][length(strsplit(maf, "/")[[1]])]
+    phyloP_outfile=paste0("phyloP_result.",mafname,".txt")
+  }
+  observed.score = phyloP(neutralMod, msa=maf, features=feature, method="LRT", mode="CONACC", branches=foregrounds, outfile=phyloP_outfile)
   observed.score = observed.score$score
   if (adapt){
     max_permulations = length(permulated_foregrounds)
@@ -170,7 +175,7 @@ run_phyloConverge_continuousTraitPermulations=function(foregrounds, num_foregrou
 #        print(node_states$states[,"statesB"])
 #      }
       #pdf("fg2tree.all.pdf", height=25, width=17, onefile=TRUE)
-      fg2t_all = foreground2Tree(perm_fg_species, masterTree, plotTree=F, clade="all", useSpecies=names(maf))
+      fg2t_all = foreground2Tree(perm_fg_species, masterTree, plotTree=T, clade="all", useSpecies=names(maf))
       #fg2t_ancestral = foreground2Tree(perm_fg_species, masterTree, plotTree=T, clade="ancestral", useSpecies=names(maf))
       #fg2t_terminal = foreground2Tree(perm_fg_species, masterTree, plotTree=T, clade="terminal", useSpecies=names(maf))
       #dev.off()
